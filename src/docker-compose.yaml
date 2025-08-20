@@ -1,0 +1,151 @@
+version: '3.8'
+
+x-backend-template: &backend-template
+  image: go-app  # Use pre-built image instead of build
+  env_file:
+    - .env
+  environment:
+    - DB_HOST=postgres
+    - DB_PORT=5432
+    - DB_NAME=rinha
+    - DB_USER=postgres
+    - DB_PASSWORD=postgres
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - REDIS_PASSWORD=
+    - REDIS_DB=0
+    - DEFAULT_HEALTH_CHECK_URL=http://payment-processor-default:8080/payments/service-health
+    - FALLBACK_HEALTH_CHECK_URL=http://payment-processor-fallback:8080/payments/service-health
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - backend
+    - payment-processor
+  deploy:
+    resources:
+      limits:
+        cpus: "0.65" # 0.5
+        memory: "60MB" # 60MB
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "9999:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api1
+      - api2
+    networks:
+      - backend
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.05"
+          memory: "15MB"
+
+  api1:
+    <<: *backend-template
+    container_name: api1
+    hostname: api1
+    networks:
+      - backend
+      - payment-processor 
+  api2:
+    <<: *backend-template
+    container_name: api2
+    hostname: api2
+    networks:
+      - backend
+      - payment-processor
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+    hostname: postgres
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=rinha
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rinha"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - backend
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5" # 0.5
+          memory: "200MB" # 200MB 
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    hostname: redis
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxclients 500
+      --maxmemory 75mb
+      --maxmemory-policy noeviction
+      --tcp-keepalive 30
+      --tcp-backlog 511
+      --timeout 0
+      --io-threads 4
+      --io-threads-do-reads yes
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
+      --lazyfree-lazy-server-del yes
+      --replica-lazy-flush yes
+      --stream-node-max-bytes 4096
+      --stream-node-max-entries 100
+      --hash-max-ziplist-entries 512
+      --hash-max-ziplist-value 64
+      --list-max-ziplist-size -2
+      --list-compress-depth 0
+      --set-max-intset-entries 512
+      --zset-max-ziplist-entries 128
+      --zset-max-ziplist-value 64
+      --hll-sparse-max-bytes 3000
+      --notify-keyspace-events ""
+      --client-output-buffer-limit "normal 0 0 0"
+      --client-output-buffer-limit "replica 256mb 64mb 60"
+      --client-output-buffer-limit "pubsub 32mb 8mb 60"
+      --stop-writes-on-bgsave-error no
+      --rdbcompression no
+      --rdbchecksum no
+      --databases 1      
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.45" # 0.45
+          memory: "75MB" # 75MB
+
+networks:
+  backend:
+    driver: bridge
+  payment-processor:
+    external: true
+    name: payment-processor
