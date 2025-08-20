@@ -1,7 +1,7 @@
 version: '3.8'
 
 x-backend-template: &backend-template
-  image: go-app  # Use pre-built image instead of build
+  image: payment-processor
   env_file:
     - .env
   environment:
@@ -27,8 +27,8 @@ x-backend-template: &backend-template
   deploy:
     resources:
       limits:
-        cpus: "0.65" # 0.5
-        memory: "60MB" # 60MB
+        cpus: "0.55"
+        memory: "60MB"
 
 services:
   nginx:
@@ -87,8 +87,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5" # 0.5
-          memory: "200MB" # 200MB 
+          cpus: "0.55"
+          memory: "200MB"
 
   redis:
     image: redis:7-alpine
@@ -140,8 +140,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.45" # 0.45
-          memory: "75MB" # 75MB
+          cpus: "0.45"
+          memory: "75MB"
 
 networks:
   backend:
