@@ -124,9 +124,14 @@ Get payment processing summary
 **Response:**
 ```json
 {
-  "total_amount": 1000.00,
-  "total_fee": 50.00,
-  "total_count": 10
+	"default": {
+		"totalRequests": 11630,
+		"totalAmount": 231436.99999995486
+	},
+	"fallback": {
+		"totalRequests": 3535,
+		"totalAmount": 70346.50000000198
+	}
 }
 ```
 
