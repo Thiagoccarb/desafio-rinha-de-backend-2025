@@ -39,7 +39,7 @@ cd src
 
 2. **Build Docker image:**
 ```bash
-docker build -t payment-processor .
+docker build -t go-app .
 ```
 
 3. **Start payment processor services:**
