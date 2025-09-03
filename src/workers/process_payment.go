@@ -26,7 +26,7 @@ type StreamWorkerPool struct {
 	stopCh                chan struct{}
 	wg                    sync.WaitGroup
 	processPaymentService services.ProcessPaymentService
-	processPaymentUseCase usecases.ProcessPaymentUseCase
+	queuePaymentUseCase   usecases.QueuePaymentsUseCase
 }
 
 func NewStreamWorkerPool(
@@ -35,7 +35,7 @@ func NewStreamWorkerPool(
 	groupName string,
 	numWorkers int,
 	processPaymentService services.ProcessPaymentService,
-	processPaymentUseCase usecases.ProcessPaymentUseCase,
+	queuePaymentUseCase usecases.QueuePaymentsUseCase,
 ) *StreamWorkerPool {
 	return &StreamWorkerPool{
 		redis:                 redis,
@@ -44,7 +44,7 @@ func NewStreamWorkerPool(
 		numWorkers:            numWorkers,
 		stopCh:                make(chan struct{}),
 		processPaymentService: processPaymentService,
-		processPaymentUseCase: processPaymentUseCase,
+		queuePaymentUseCase:   queuePaymentUseCase,
 	}
 }
 
@@ -57,6 +57,7 @@ func (swp *StreamWorkerPool) Start(ctx context.Context) error {
 		swp.wg.Add(1)
 		go swp.worker(ctx, fmt.Sprintf("worker-%d", i))
 	}
+	go swp.getServiceStatusData(ctx)
 
 	log.Printf("Started %d stream workers for %s", swp.numWorkers, swp.streamName)
 	return nil
@@ -90,8 +91,9 @@ func (swp *StreamWorkerPool) worker(ctx context.Context, consumerName string) {
 
 			for _, stream := range streams {
 				for _, message := range stream.Messages {
-					defaultStatus := swp.getDefaultServiceStatusData(ctx)
-					fallbackStatus := swp.getFallbackStatusData(ctx)
+					defaultStatus := swp.getSerializedServiceStatus(ctx, "default")
+					fallbackStatus := swp.getSerializedServiceStatus(ctx, "fallback")
+
 					if defaultStatus.Failing && fallbackStatus.Failing {
 						swp.redis.XAdd(ctx, swp.streamName, message.Values)
 						continue
@@ -135,32 +137,33 @@ func (swp *StreamWorkerPool) processPayment(serviceType string, message redis.XM
 		RequestedAt:   requestedAt,
 		Type:          serviceType,
 	}
-	var success bool
-	success = swp.processPaymentService.ProcessPayment(serviceType, paymentData, ctx)
-	if !success {
-		return false
+
+	success := swp.processPaymentService.ProcessPayment(serviceType, paymentData, ctx)
+	if success {
+		parsedTime, _ := time.Parse(time.RFC3339, requestedAt)
+		tsFloat := float64(parsedTime.Unix())
+		swp.queuePaymentUseCase.StoreAsScore(ctx, config.LoadConfig().SetQueue, tsFloat, paymentData)
 	}
-	success = swp.processPaymentUseCase.Execute(ctx, paymentData)
-	return success
+	return true
 }
 
-func (swp *StreamWorkerPool) getDefaultServiceStatusData(ctx context.Context) structs.ServiceStatus {
+func (swp *StreamWorkerPool) getSerializedServiceStatus(ctx context.Context, serviceType string) structs.ServiceStatus {
 	config := config.LoadConfig()
 	var data string
 	var status structs.ServiceStatus
-	data, _ = swp.redis.Get(ctx, config.RedisDefaultServiceStatuskey)
-	if data == "" {
-		defaultServiceStatus, err := services.GetDefaultServiceStatusData()
-		if err != nil {
-			log.Printf("Failed to get default service status: %v", err)
-			return structs.ServiceStatus{
-				Failing:         true,
-				MinResponseTime: 0,
-			}
-		}
-		data = string(defaultServiceStatus)
-		swp.redis.Set(ctx, config.RedisDefaultServiceStatuskey, data)
+	if serviceType == "default" {
+		data, _ = swp.redis.Get(ctx, config.RedisDefaultServiceStatuskey)
+	} else {
+		data, _ = swp.redis.Get(ctx, config.RedisFallbackServiceStatuskey)
 	}
+
+	if data == "" {
+		return structs.ServiceStatus{
+			Failing:         true,
+			MinResponseTime: 0,
+		}
+	}
+	data = string(data)
 	if err := json.Unmarshal([]byte(data), &status); err != nil {
 		log.Printf("Failed to unmarshal  service status: %v", err)
 		return structs.ServiceStatus{
@@ -171,30 +174,32 @@ func (swp *StreamWorkerPool) getDefaultServiceStatusData(ctx context.Context) st
 	return status
 }
 
-func (swp *StreamWorkerPool) getFallbackStatusData(ctx context.Context) structs.ServiceStatus {
-	config := config.LoadConfig()
-	var data string
-	var status structs.ServiceStatus
-
-	data, _ = swp.redis.Get(ctx, config.RedisFallbackServiceStatuskey)
-	if data == "" {
-		fallbackStatus, err2 := services.GetFallbackServiceStatusData()
-		if err2 != nil {
-			log.Printf("Failed to get fallback service status: %v", err2)
-			return structs.ServiceStatus{
-				Failing:         true,
-				MinResponseTime: 0,
+func (swp *StreamWorkerPool) getServiceStatusData(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-swp.stopCh:
+			log.Println("Service status goroutine: Stop signal received, stopping execution")
+			return
+		case <-ctx.Done():
+			log.Println("Service status goroutine: Context canceled, stopping execution")
+			return
+		case <-ticker.C:
+			newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			config := config.LoadConfig()
+			defaultStatus, err := services.GetDefaultServiceStatusData(newCtx)
+			if err != nil {
+				log.Printf("Failed to get default service status: %v", err)
 			}
-		}
-		data = string(fallbackStatus)
-		swp.redis.Set(ctx, config.RedisFallbackServiceStatuskey, data)
-	}
-	if err := json.Unmarshal([]byte(data), &status); err != nil {
-		log.Printf("Failed to unmarshal  service status: %v", err)
-		return structs.ServiceStatus{
-			Failing:         true,
-			MinResponseTime: 0,
+			swp.redis.Set(ctx, config.RedisDefaultServiceStatuskey, string(defaultStatus))
+			fallbackStatus, err := services.GetFallbackServiceStatusData(newCtx)
+			if err != nil {
+				log.Printf("Failed to get fallback service status: %v", err)
+			}
+			swp.redis.Set(ctx, config.RedisFallbackServiceStatuskey, string(fallbackStatus))
 		}
 	}
-	return status
+
 }

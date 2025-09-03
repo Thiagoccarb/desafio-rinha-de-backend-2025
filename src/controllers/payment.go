@@ -92,29 +92,8 @@ func (pc *PaymentController) GetPaymentsSummary(c *gin.Context) {
 
 	summary, err := pc.GetPaymentsSummaryUseCase.Execute(c.Request.Context(), from, to)
 	if err != nil {
-		log.Printf("Error fetching payments summary: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch summary"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve payments summary"})
 		return
 	}
-
-	resp := PaymentsSummaryResponse{
-		Default:  &SummaryItem{TotalRequests: 0, TotalAmount: 0},
-		Fallback: &SummaryItem{TotalRequests: 0, TotalAmount: 0},
-	}
-	for _, item := range summary {
-		switch item.Type {
-		case 1:
-			resp.Default = &SummaryItem{
-				TotalRequests: item.TotalRequests,
-				TotalAmount:   item.TotalAmount,
-			}
-		case 2:
-			resp.Fallback = &SummaryItem{
-				TotalRequests: item.TotalRequests,
-				TotalAmount:   item.TotalAmount,
-			}
-		}
-	}
-
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, summary)
 }

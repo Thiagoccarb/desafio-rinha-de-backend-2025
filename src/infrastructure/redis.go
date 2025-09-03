@@ -110,3 +110,27 @@ func (r *Redis) XAck(ctx context.Context, stream, group string, ids ...string) e
 	_, err := r.client.XAck(ctx, stream, group, ids...).Result()
 	return err
 }
+
+func (r *Redis) ZAdd(ctx context.Context, key string, data redis.Z) error {
+	_, err := r.client.ZAdd(ctx, key, data).Result()
+	if err != nil {
+		return fmt.Errorf("failed to add to sorted set: %w", err)
+	}
+	return nil
+}
+
+func (r *Redis) ZRangeByScore(ctx context.Context, key string, min, max time.Time) ([]string, error) {
+	minFloat := fmt.Sprintf("%.6f", float64(min.Unix())+float64(min.Nanosecond())/1e9)
+	maxFloat := fmt.Sprintf("%.6f", float64(max.Unix())+float64(max.Nanosecond())/1e9)
+	values, err := r.client.ZRangeByScore(ctx, key, &redis.ZRangeBy{
+		Min: minFloat,
+		Max: maxFloat,
+	}).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to range by score: %w", err)
+	}
+	for _, value := range values {
+		fmt.Println("ZRangeByScore value:", value)
+	}
+	return values, nil
+}

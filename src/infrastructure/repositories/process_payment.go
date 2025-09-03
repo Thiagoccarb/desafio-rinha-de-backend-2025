@@ -2,8 +2,10 @@ package repositories
 
 import (
 	"context"
+	"fmt"
 	"payment-processor/core/models"
 	"payment-processor/interfaces"
+	"strings"
 	"time"
 )
 
@@ -15,21 +17,6 @@ func NewPaymentRepository(conn interfaces.DatabaseConnection) *PaymentRepository
 	return &PaymentRepository{
 		conn: conn,
 	}
-}
-
-func (r *PaymentRepository) CreatePayment(ctx context.Context, data models.Payment) error {
-	var Type int
-	if data.Type == "default" {
-		Type = 1
-	} else {
-		Type = 2
-	}
-	query := `INSERT INTO rinha (uuid, amount, type, created_at) VALUES ($1, $2, $3, $4)`
-	_, err := r.conn.Execute(ctx, query, data.CorrelationID, data.Amount, Type, data.RequestedAt)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (r *PaymentRepository) GetPaymentSummary(ctx context.Context, from, to time.Time) ([]models.PaymentsSummary, error) {
@@ -59,4 +46,35 @@ func (r *PaymentRepository) GetPaymentSummary(ctx context.Context, from, to time
 	}
 	return summaries, nil
 
+}
+
+func (r *PaymentRepository) BatchCreatePayments(ctx context.Context, payments []models.Payment) error {
+	if len(payments) == 0 {
+		return nil
+	}
+
+	query := `INSERT INTO rinha (uuid, amount, type, created_at) VALUES `
+	values := []interface{}{}
+	placeholders := []string{}
+
+	for i, payment := range payments {
+		var Type int
+		if payment.Type == "default" {
+			Type = 1
+		} else {
+			Type = 2
+		}
+
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d)", i*4+1, i*4+2, i*4+3))
+		values = append(values, payment.CorrelationID, payment.Amount, Type)
+	}
+
+	query += strings.Join(placeholders, ", ")
+
+	_, err := r.conn.Execute(ctx, query, values...)
+	if err != nil {
+		return fmt.Errorf("failed to batch insert payments: %w", err)
+	}
+
+	return nil
 }

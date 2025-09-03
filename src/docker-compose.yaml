@@ -51,6 +51,7 @@ services:
           memory: "15MB"
 
   api1:
+    image: go-app
     <<: *backend-template
     container_name: api1
     hostname: api1
@@ -58,6 +59,7 @@ services:
       - backend
       - payment-processor 
   api2:
+    image: go-app
     <<: *backend-template
     container_name: api2
     hostname: api2

@@ -65,7 +65,7 @@ func (ps *ProcessPaymentService) ProcessPayment(
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Payment processing failed with status:\n\n\n\n\n\n\n\n\n %s and correlationId: %s", resp.Status, payload.CorrelationID)
+		fmt.Printf("Payment processing failed with status: %s and correlationId: %s", resp.Status, payload.CorrelationID)
 		return false
 	}
 	return true

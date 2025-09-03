@@ -1,10 +1,12 @@
 package usecases
 
 import (
+	"encoding/json"
 	"fmt"
 	"payment-processor/core/models"
 	"payment-processor/infrastructure"
 
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/context"
 )
 
@@ -30,4 +32,17 @@ func (u *QueuePaymentsUseCase) EnqueuePayment(ctx context.Context, queueName str
 		fmt.Println("Error adding payment to queue:", err)
 	}
 	return nil
+}
+
+func (u *QueuePaymentsUseCase) StoreAsScore(ctx context.Context, queueName string, requestedAtFloat float64, paymentData models.Payment) error {
+	var err error
+	if paymentString, err := json.Marshal(paymentData); err == nil {
+		err := u.Redis.ZAdd(ctx, queueName, redis.Z{Score: requestedAtFloat, Member: string(paymentString)})
+		if err != nil {
+			fmt.Println("Error adding payment to sorted set:", err)
+		}
+		return nil
+	}
+	return err
+
 }

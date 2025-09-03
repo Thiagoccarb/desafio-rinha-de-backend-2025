@@ -1,22 +1,17 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"payment-processor/config"
-	"time"
 )
 
-func GetDefaultServiceStatusData() ([]byte, error) {
+func GetDefaultServiceStatusData(ctx context.Context) ([]byte, error) {
 	configs := config.LoadConfig()
 
-	client := &http.Client{
-		Timeout: 1 * time.Second,
-		Transport: &http.Transport{
-			DisableKeepAlives: false,
-		},
-	}
+	client := &http.Client{}
 	url := configs.Services.DefaultHealthCheckURL
 
 	req, err := http.NewRequest("GET", url, nil)

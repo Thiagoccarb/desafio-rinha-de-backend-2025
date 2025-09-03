@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"payment-processor/config"
 	"payment-processor/core/services"
 	"payment-processor/infrastructure"
 	"payment-processor/infrastructure/migrations"
@@ -18,21 +19,22 @@ import (
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
+	config := config.LoadConfig()
 	redis := infrastructure.NewRedis()
 	conn := infrastructure.NewPostgresConnection()
 	queueUseCase := usecases.NewQueuePaymentsUseCase(redis)
 	paymentRepository := repositories.NewPaymentRepository(conn)
 	processPaymentService := services.NewProcessPaymentService(queueUseCase)
-	processPaymentUseCase := usecases.NewProcessPaymentUseCase(*paymentRepository)
+	queuePaymentUseCase := usecases.NewQueuePaymentsUseCase(redis)
+	getPaymentUseCase := usecases.NewGetPaymentsSummaryUseCase(redis)
 
 	streamWorkerPool := workers.NewStreamWorkerPool(
 		*redis,
-		"payments",
+		config.Queue,
 		"payment-group",
-		5,
+		10,
 		*processPaymentService,
-		*processPaymentUseCase,
+		*queuePaymentUseCase,
 	)
 	if err := streamWorkerPool.Start(ctx); err != nil {
 		log.Fatal("Failed to start stream worker pool:", err)
@@ -43,6 +45,14 @@ func main() {
 	migrations.CreateRinhaTable()
 
 	defer redis.Close()
+
+	processPaymentUseCase := usecases.NewProcessPaymentUseCase(
+		*paymentRepository,
+		*getPaymentUseCase,
+		*redis,
+	)
+
+	go processPaymentUseCase.Execute(ctx)
 
 	router := gin.Default()
 	router.Use(corsMiddleware())

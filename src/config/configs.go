@@ -38,6 +38,7 @@ type Config struct {
 	Services                      ServiceConfig
 	Redis                         RedisConfig
 	Queue                         string
+	SetQueue                      string
 	DQLQueue                      string
 	RedisDefaultServiceStatuskey  string
 	RedisFallbackServiceStatuskey string
@@ -76,6 +77,7 @@ func LoadConfig() *Config {
 			},
 			Queue:                         getEnv("QUEUE_NAME", "payments"),
 			DQLQueue:                      getEnv("DQL_QUEUE_NAME", "dql_payments"),
+			SetQueue:                      getEnv("SET_QUEUE_NAME", "processed_payments"),
 			RedisDefaultServiceStatuskey:  getEnv("REDIS_DEFAULT_SERVICE_STATUS_KEY", "default_service_status"),
 			RedisFallbackServiceStatuskey: getEnv("REDIS_FALLBACK_SERVICE_STATUS_KEY", "fallback_service_status"),
 		}
