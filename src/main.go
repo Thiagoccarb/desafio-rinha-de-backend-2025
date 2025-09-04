@@ -32,7 +32,7 @@ func main() {
 		*redis,
 		config.Queue,
 		"payment-group",
-		10,
+		12,
 		*processPaymentService,
 		*queuePaymentUseCase,
 	)
@@ -51,8 +51,9 @@ func main() {
 		*getPaymentUseCase,
 		*redis,
 	)
-
-	go processPaymentUseCase.Execute(ctx)
+	if config.ShouldPersistInDB {
+		go processPaymentUseCase.Execute(ctx)
+	}
 
 	router := gin.Default()
 	router.Use(corsMiddleware())

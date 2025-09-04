@@ -28,7 +28,7 @@ x-backend-template: &backend-template
     resources:
       limits:
         cpus: "0.55"
-        memory: "60MB"
+        memory: "85MB"
 
 services:
   nginx:
@@ -89,8 +89,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.55"
-          memory: "200MB"
+          cpus: "0.45"
+          memory: "100MB"
 
   redis:
     image: redis:7-alpine
@@ -142,8 +142,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.45"
-          memory: "75MB"
+          cpus: "0.55"
+          memory: "125MB"
 
 networks:
   backend:

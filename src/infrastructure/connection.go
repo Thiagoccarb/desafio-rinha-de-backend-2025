@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"payment-processor/config"
 	"payment-processor/interfaces"
-	"time"
 )
 
 type PostgresConnection struct {
@@ -23,10 +22,6 @@ func NewPostgresConnection() interfaces.DatabaseConnection {
 	config := config.LoadConfig()
 	connString := config.Database.ConnectionString()
 	db, _ := sql.Open("postgres", connString)
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(1 * time.Minute)
 	return &PostgresConnection{Conn: db}
 }
 

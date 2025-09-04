@@ -13,15 +13,26 @@ import (
 )
 
 type ProcessPaymentService struct {
-	QueueUseCase          *usecases.QueuePaymentsUseCase
-	ProcessPaymentUseCase *usecases.ProcessPaymentUseCase
+	QueueUseCase *usecases.QueuePaymentsUseCase
+	httpClient   *http.Client
 }
 
 func NewProcessPaymentService(
 	queueUseCase *usecases.QueuePaymentsUseCase,
 ) *ProcessPaymentService {
+	transport := &http.Transport{
+		IdleConnTimeout:    30 * time.Second,
+		DisableKeepAlives:  false,
+		DisableCompression: true,
+	}
+
+	client := &http.Client{
+		Timeout:   800 * time.Millisecond,
+		Transport: transport,
+	}
 	return &ProcessPaymentService{
 		QueueUseCase: queueUseCase,
+		httpClient:   client,
 	}
 }
 
@@ -52,13 +63,7 @@ func (ps *ProcessPaymentService) ProcessPayment(
 		return false
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{
-		Timeout: 1 * time.Second,
-		Transport: &http.Transport{
-			DisableKeepAlives: false,
-		},
-	}
-	resp, err := client.Do(req)
+	resp, err := ps.httpClient.Do(req)
 	if err != nil {
 		fmt.Printf("HTTP request failed: %v", err)
 		return false

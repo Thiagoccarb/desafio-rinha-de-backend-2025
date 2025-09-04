@@ -42,6 +42,7 @@ type Config struct {
 	DQLQueue                      string
 	RedisDefaultServiceStatuskey  string
 	RedisFallbackServiceStatuskey string
+	ShouldPersistInDB             bool
 }
 
 var (
@@ -80,9 +81,14 @@ func LoadConfig() *Config {
 			SetQueue:                      getEnv("SET_QUEUE_NAME", "processed_payments"),
 			RedisDefaultServiceStatuskey:  getEnv("REDIS_DEFAULT_SERVICE_STATUS_KEY", "default_service_status"),
 			RedisFallbackServiceStatuskey: getEnv("REDIS_FALLBACK_SERVICE_STATUS_KEY", "fallback_service_status"),
+			ShouldPersistInDB:             parseBool(getEnv("SHOULD_PERSIST_IN_DB", "false")),
 		}
 	})
 	return config
+}
+
+func parseBool(s string) bool {
+	return s == "1" || s == "true" || s == "True" || s == "TRUE"
 }
 
 func (db *DatabaseConfig) ConnectionString() string {

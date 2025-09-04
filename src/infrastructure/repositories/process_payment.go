@@ -65,11 +65,17 @@ func (r *PaymentRepository) BatchCreatePayments(ctx context.Context, payments []
 			Type = 2
 		}
 
-		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d)", i*4+1, i*4+2, i*4+3))
-		values = append(values, payment.CorrelationID, payment.Amount, Type)
+		createdAt, err := time.Parse(time.RFC3339, payment.RequestedAt)
+		if err != nil {
+			createdAt = time.Now().UTC()
+		}
+
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d)", i*4+1, i*4+2, i*4+3, i*4+4))
+		values = append(values, payment.CorrelationID, payment.Amount, Type, createdAt)
 	}
 
 	query += strings.Join(placeholders, ", ")
+	query += ` ON CONFLICT (uuid) DO NOTHING`
 
 	_, err := r.conn.Execute(ctx, query, values...)
 	if err != nil {

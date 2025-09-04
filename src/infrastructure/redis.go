@@ -129,8 +129,5 @@ func (r *Redis) ZRangeByScore(ctx context.Context, key string, min, max time.Tim
 	if err != nil {
 		return nil, fmt.Errorf("failed to range by score: %w", err)
 	}
-	for _, value := range values {
-		fmt.Println("ZRangeByScore value:", value)
-	}
 	return values, nil
 }
